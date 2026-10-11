@@ -67,6 +67,8 @@ npx vercel@latest deploy --prod --yes
 Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the
 Vercel project's build environments before deploying. `vercel.json` builds the
 web app with npm and serves `dist`, including an SPA fallback for auth callbacks.
+The web build moves exported icon fonts into `assets/vendor` so Vercel CLI
+includes them when uploading the static output.
 Add `https://<your-vercel-domain>/auth/callback` to the Supabase Auth redirect
 allowlist for web Google sign-in and email confirmation.
 
