@@ -61,7 +61,30 @@ export const LoginScreen: React.FC = () => {
       if (authMode === 'login') {
         const res = await authService.signInWithEmail(trimmedEmail, password);
         if (!res.success) {
-          Alert.alert('Đăng nhập thất bại', res.error || 'Email hoặc mật khẩu không đúng.');
+          if (res.errorCode === 'email_not_confirmed') {
+            Alert.alert(
+              'Email chưa xác nhận',
+              res.error || 'Hãy mở liên kết trong hộp thư rồi đăng nhập lại.',
+              [
+                { text: 'Đóng', style: 'cancel' },
+                {
+                  text: 'Gửi lại email',
+                  onPress: () => {
+                    authService.resendSignupEmail(trimmedEmail).then((sent) => {
+                      Alert.alert(
+                        sent.success ? 'Đã gửi lại' : 'Chưa gửi được',
+                        sent.success
+                          ? 'Kiểm tra hộp thư và thư rác, bấm liên kết xác nhận, rồi đăng nhập lại.'
+                          : sent.error || 'Không gửi lại được email xác nhận.'
+                      );
+                    });
+                  },
+                },
+              ]
+            );
+          } else {
+            Alert.alert('Đăng nhập thất bại', res.error || 'Email hoặc mật khẩu không đúng.');
+          }
         } else if (res.session) {
           useBookingStore.getState().setSession(res.session);
           if (res.session.user) {

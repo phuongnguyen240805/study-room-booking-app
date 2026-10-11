@@ -1,9 +1,35 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { Profile } from '../types/auth';
+import { getAuthErrorMessage } from '../utils/errorUtils';
 
 WebBrowser.maybeCompleteAuthSession();
+
+export type AuthResult = {
+  success: boolean;
+  error?: string;
+  errorCode?: string;
+  session?: Session | null;
+  needConfirmation?: boolean;
+};
+
+const exchangedCodes = new Set<string>();
+
+function authFailure(error: { message?: string; code?: string } | null | undefined): AuthResult {
+  return {
+    success: false,
+    error: getAuthErrorMessage(error),
+    errorCode: error?.code,
+  };
+}
+
+export function getAuthRedirectUrl(): string {
+  return AuthSession.makeRedirectUri({
+    path: 'auth/callback',
+  });
+}
 
 function extractParamsFromUrl(urlString: string): Record<string, string> {
   const params: Record<string, string> = {};
@@ -13,7 +39,6 @@ function extractParamsFromUrl(urlString: string): Record<string, string> {
     const questionIndex = urlString.indexOf('?');
     const hashIndex = urlString.indexOf('#');
 
-    // Extract search query params (?code=... or ?error=...)
     if (questionIndex !== -1) {
       const search =
         hashIndex !== -1 && hashIndex > questionIndex
@@ -24,7 +49,6 @@ function extractParamsFromUrl(urlString: string): Record<string, string> {
       });
     }
 
-    // Extract hash fragment params (#access_token=... or #error=...)
     if (hashIndex !== -1) {
       const hash = urlString.substring(hashIndex + 1);
       new URLSearchParams(hash).forEach((v, k) => {
@@ -32,21 +56,70 @@ function extractParamsFromUrl(urlString: string): Record<string, string> {
       });
     }
   } catch (e) {
-    console.warn('[Google Auth] Lỗi trích xuất params từ URL:', e);
+    console.warn('[Auth] Lỗi trích xuất params từ URL:', e);
   }
 
   return params;
 }
 
-export const authService = {
-  async signInWithGoogle(): Promise<{ success: boolean; error?: string; session?: any }> {
-    try {
-      // In Expo Go, makeRedirectUri({ path: 'auth/callback' }) creates an exp:// redirect URI.
-      // In Standalone APK, it automatically creates a vku-study-room:// redirect URI from app.json.
-      const redirectUrl = AuthSession.makeRedirectUri({
-        path: 'auth/callback',
-      });
+export function isAuthCallbackUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return (
+    url.includes('auth/callback') ||
+    url.includes('access_token=') ||
+    url.includes('code=') ||
+    url.includes('error_description=')
+  );
+}
 
+export const authService = {
+  async completeSessionFromUrl(url: string, flowId?: string | null): Promise<AuthResult> {
+    const params = extractParamsFromUrl(url);
+
+    if (params.error || params.error_description) {
+      const raw = decodeURIComponent(params.error_description || params.error || 'Xác thực bị từ chối.');
+      return authFailure({ message: raw, code: params.error });
+    }
+
+    if (params.code) {
+      if (exchangedCodes.has(params.code)) {
+        const session = await this.getCurrentSession();
+        return session
+          ? { success: true, session }
+          : { success: false, error: 'Mã xác thực đã được dùng. Hãy thử đăng nhập lại.' };
+      }
+      exchangedCodes.add(params.code);
+
+      const { data, error } = await supabase.auth.exchangeCodeForSession(
+        params.code,
+        flowId ? { flowId } : undefined
+      );
+      if (error) {
+        const session = await this.getCurrentSession();
+        if (session) return { success: true, session };
+        return authFailure(error);
+      }
+      return { success: true, session: data.session };
+    }
+
+    if (params.access_token && params.refresh_token) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: params.access_token,
+        refresh_token: params.refresh_token,
+      });
+      if (error) return authFailure(error);
+      return { success: true, session: data.session };
+    }
+
+    return {
+      success: false,
+      error: 'Không tìm thấy mã xác thực trong đường dẫn chuyển hướng.',
+    };
+  },
+
+  async signInWithGoogle(): Promise<AuthResult> {
+    try {
+      const redirectUrl = getAuthRedirectUrl();
       console.log('[Google Auth] Redirect URI đang dùng:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -56,131 +129,108 @@ export const authService = {
           skipBrowserRedirect: true,
           queryParams: {
             prompt: 'select_account',
-            access_type: 'offline',
           },
         },
       });
 
       if (error) {
         console.error('[Google Auth] Lỗi signInWithOAuth:', error);
-        return { success: false, error: error.message };
+        return authFailure(error);
       }
 
       if (!data?.url) {
         return { success: false, error: 'Không thể tạo liên kết đăng nhập Google từ Supabase.' };
       }
 
-      console.log('[Google Auth] Mở AuthSession trình duyệt...');
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
         showInRecents: false,
       });
-      console.log('[Google Auth] Kết quả WebBrowser:', JSON.stringify(result));
+      console.log('[Google Auth] Kết quả WebBrowser:', result.type);
 
       if (result.type === 'success' && result.url) {
-        console.log('[Google Auth] Callback URL thành công:', result.url);
-        const params = extractParamsFromUrl(result.url);
-        console.log('[Google Auth] Keys nhận được:', Object.keys(params));
+        return await this.completeSessionFromUrl(result.url, data.flowId);
+      }
 
-        if (params.error || params.error_description) {
-          const errorMsg = decodeURIComponent(
-            params.error_description || params.error || 'Xác thực Google bị từ chối.'
-          );
-          console.error('[Google Auth] Lỗi từ OAuth Provider:', errorMsg);
-          return { success: false, error: errorMsg };
-        }
-
-        if (params.code) {
-          console.log('[Google Auth] Đang đổi code lấy session...');
-          const { data: exchangeData, error: exchangeError } =
-            await supabase.auth.exchangeCodeForSession(params.code);
-          if (exchangeError) {
-            console.error('[Google Auth] Lỗi exchangeCodeForSession:', exchangeError);
-            return { success: false, error: exchangeError.message };
-          }
-          return { success: true, session: exchangeData.session };
-        } else if (params.access_token && params.refresh_token) {
-          console.log('[Google Auth] Đang thiết lập session từ tokens...');
-          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-            access_token: params.access_token,
-            refresh_token: params.refresh_token,
-          });
-          if (sessionError) {
-            console.error('[Google Auth] Lỗi setSession:', sessionError);
-            return { success: false, error: sessionError.message };
-          }
-          return { success: true, session: sessionData.session };
-        }
-
-        return {
-          success: false,
-          error: 'Không tìm thấy mã xác thực (code/token) trong phản hồi chuyển hướng.',
-        };
+      const existing = await this.getCurrentSession();
+      if (existing) {
+        return { success: true, session: existing };
       }
 
       if (result.type === 'cancel' || result.type === 'dismiss') {
         return {
           success: false,
           error:
-            'Trình duyệt xác thực đã bị đóng hoặc ứng dụng không nhận được URL chuyển hướng. Vui lòng kiểm tra lại cấu hình Redirect URLs trong Supabase.',
+            'Trình duyệt xác thực đã đóng trước khi đăng nhập xong. Nếu bạn vừa chọn tài khoản Google, hãy thử lại.',
         };
       }
 
-      return { success: true };
+      return { success: false, error: 'Đăng nhập Google chưa hoàn tất.' };
     } catch (err: any) {
       console.error('[Google Auth] Ngoại lệ signInWithGoogle:', err);
       return { success: false, error: err.message || 'Lỗi không xác định khi đăng nhập Google.' };
     }
   },
 
-  async signInWithEmail(
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; session?: any; error?: string }> {
+  async signInWithEmail(email: string, password: string): Promise<AuthResult> {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        password: password,
+        password,
       });
 
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
+      if (error) return authFailure(error);
       return { success: true, session: data.session };
     } catch (err: any) {
       return { success: false, error: err.message || 'Lỗi đăng nhập bằng email.' };
     }
   },
 
-  async signUpWithEmail(
-    email: string,
-    password: string,
-    fullName: string
-  ): Promise<{ success: boolean; session?: any; error?: string; needConfirmation?: boolean }> {
+  async signUpWithEmail(email: string, password: string, fullName: string): Promise<AuthResult> {
     try {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
-        password: password,
+        password,
         options: {
+          emailRedirectTo: getAuthRedirectUrl(),
           data: {
             full_name: fullName.trim(),
           },
         },
       });
 
-      if (error) {
-        return { success: false, error: error.message };
-      }
+      if (error) return authFailure(error);
 
       if (data.session) {
         return { success: true, session: data.session };
-      } else if (data.user) {
+      }
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        return {
+          success: false,
+          error: 'Email này đã có tài khoản. Hãy chuyển sang Đăng nhập.',
+          errorCode: 'email_exists',
+        };
+      }
+      if (data.user) {
         return { success: true, needConfirmation: true };
       }
 
-      return { success: true };
+      return { success: true, needConfirmation: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Lỗi đăng ký tài khoản.' };
+    }
+  },
+
+  async resendSignupEmail(email: string): Promise<AuthResult> {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: { emailRedirectTo: getAuthRedirectUrl() },
+      });
+      if (error) return authFailure(error);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Không gửi lại được email xác nhận.' };
     }
   },
 

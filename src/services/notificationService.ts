@@ -8,11 +8,10 @@ const NOTIFICATION_MAP_KEY = 'VKU_BOOKING_NOTIFICATION_MAP';
 try {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: false,
       shouldShowBanner: true,
-      shouldPresentAlert: true,
+      shouldShowList: true,
     }),
   });
 } catch (e) {
