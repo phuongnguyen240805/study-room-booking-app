@@ -1,3 +1,4 @@
+import { Alert } from '../utils/alert';
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -6,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,

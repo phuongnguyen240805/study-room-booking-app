@@ -47,3 +47,7 @@ yarn-error.*
 *.apk
 *.aab
 *.ipa
+
+# Vercel local project link
+.vercel/
+/dist-ios/

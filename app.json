@@ -26,6 +26,12 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "66a821d5-66bf-4bc4-adc4-59addb2ed0d8"
+      }
+    },
+    "owner": "phuongnguyen2408"
   }
 }

@@ -1,4 +1,5 @@
-﻿import React, { useState, useMemo } from 'react';
+import { Alert } from '../utils/alert';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';

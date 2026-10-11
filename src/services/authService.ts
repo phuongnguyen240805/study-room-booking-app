@@ -1,6 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import type { Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { Profile } from '../types/auth';
 import { getAuthErrorMessage } from '../utils/errorUtils';
@@ -140,6 +141,11 @@ export const authService = {
 
       if (!data?.url) {
         return { success: false, error: 'Không thể tạo liên kết đăng nhập Google từ Supabase.' };
+      }
+
+      if (Platform.OS === 'web') {
+        window.location.assign(data.url);
+        return { success: true };
       }
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {

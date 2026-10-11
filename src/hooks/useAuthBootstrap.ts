@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 import { authService, isAuthCallbackUrl } from '../services/authService';
 import { useBookingStore } from '../stores/useBookingStore';
@@ -66,6 +67,9 @@ export function useAuthBootstrap() {
         if (result.session && isMounted) {
           setSession(result.session);
           if (result.session.user) applyProfile(result.session.user.id);
+          if (Platform.OS === 'web') {
+            window.history.replaceState(null, '', '/');
+          }
         }
       } catch (err) {
         console.warn('Lỗi xử lý đường dẫn đăng nhập:', err);

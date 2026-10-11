@@ -54,3 +54,21 @@ Add `vku-study-room://auth/callback` to the Supabase Auth redirect allowlist for
 installed Android/iOS builds. Enable the Google provider when using Google sign-in.
 The SQL files in `supabase/` must be applied separately to the Supabase project;
 pushing code and building the app do not apply database changes.
+
+## Web on Vercel
+
+```sh
+npm run build:web
+npx vercel@latest login
+npx vercel@latest link --yes --project vku-study-room-booking
+npx vercel@latest deploy --prod --yes
+```
+
+Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the
+Vercel project's build environments before deploying. `vercel.json` builds the
+web app with npm and serves `dist`, including an SPA fallback for auth callbacks.
+Add `https://<your-vercel-domain>/auth/callback` to the Supabase Auth redirect
+allowlist for web Google sign-in and email confirmation.
+
+Native booking reminder notifications are available in the Android/iOS app;
+the web version does not schedule native notifications.

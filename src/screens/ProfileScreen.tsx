@@ -1,3 +1,4 @@
+import { Alert } from '../utils/alert';
 import React, { useState } from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';

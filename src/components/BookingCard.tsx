@@ -1,5 +1,6 @@
-﻿import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { Alert } from '../utils/alert';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Booking } from '../types/booking';
 import { TIME_SLOTS } from '../constants/timeSlots';
