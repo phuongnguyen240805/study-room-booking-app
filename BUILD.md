@@ -9,10 +9,14 @@ Install Android Studio, an Android SDK and JDK 21. Set `JAVA_HOME` and
 `ANDROID_HOME` to those installations, then run:
 
 ```powershell
-npx expo prebuild --platform android --no-install
-cd android
-.\gradlew.bat assembleRelease
+pwsh -File scripts/build-android.ps1
 ```
+
+The script uses a short local CMake build directory under `%USERPROFILE%/.vku-build`
+to avoid the Windows 260-character path limit, and copies the completed APK to
+`artifacts/VKU-Study-Room-1.0.0.apk`.
+After changing native dependencies or `app.json`, regenerate the native project
+with `npx expo prebuild --platform android --no-install` before running the script.
 
 The APK is at `android/app/build/outputs/apk/release/app-release.apk`.
 Expo's generated release configuration uses the development signing key, so this
